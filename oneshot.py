@@ -521,14 +521,14 @@ class Companion():
         elif 'Trying to authenticate with' in line:
             self.connection_status.status = 'authenticating'
             if 'SSID' in line:
-                self.connection_status.essid = codecs.decode(line.split("'")[1], 'unicode-escape').encode('latin1').decode('utf-8', errors='replace')
+                self.connection_status.essid = codecs.decode("'".join(line.split("'")[1:-1]), 'unicode-escape').encode('latin1').decode('utf-8', errors='replace')
             print('[*] Authenticating…')
         elif 'Authentication response' in line:
             print('[+] Authenticated')
         elif 'Trying to associate with' in line:
             self.connection_status.status = 'associating'
             if 'SSID' in line:
-                self.connection_status.essid = codecs.decode(line.split("'")[1], 'unicode-escape').encode('latin1').decode('utf-8', errors='replace')
+                self.connection_status.essid = codecs.decode("'".join(line.split("'")[1:-1]), 'unicode-escape').encode('latin1').decode('utf-8', errors='replace')
             print('[*] Associating with AP…')
         elif ('Associated with' in line) and (self.interface in line):
             bssid = line.split()[-1].upper()
@@ -943,9 +943,12 @@ class WiFiScanner():
                 return text
             return text
         if self.vuln_list:
-            print(colored('Green', color='green'), '— possible vulnerable network',
-                  '\n' + colored('Red', color='red'), '— WPS locked',
-                  '\n' + colored('Yellow', color='yellow'), '— already stored')
+            print('Network marks: {1} {0} {2} {0} {3}'.format(
+                '|',
+                colored('Possibly vulnerable', color='green'),
+                colored('WPS locked', color='red'),
+                colored('Already stored', color='yellow')
+            ))
         print('Networks list:')
         print('{:<4} {:<18} {:<25} {:<8} {:<4} {:<27} {:<}'.format(
             '#', 'BSSID', 'ESSID', 'Sec.', 'PWR', 'WSC device name', 'WSC model'))
@@ -959,10 +962,10 @@ class WiFiScanner():
                 network['Security type'], network['Level'],
                 deviceName, model
                 )
-            if network['WPS locked']:
-                print(colored(line, color='red'))
-            elif (network['BSSID'], network['ESSID']) in self.stored:
+            if (network['BSSID'], network['ESSID']) in self.stored:
                 print(colored(line, color='yellow'))
+            elif network['WPS locked']:
+                print(colored(line, color='red'))
             elif self.vuln_list and (model in self.vuln_list):
                 print(colored(line, color='green'))
             else:
@@ -973,7 +976,7 @@ class WiFiScanner():
     def prompt_network(self):
         networks = self.iw_scanner()
         if not networks:
-            print('[-] No networks found.')
+            print('[-] No WPS networks found.')
             return
         while 1:
             try:
@@ -1133,7 +1136,8 @@ if __name__ == '__main__':
                 except FileNotFoundError:
                     vuln_list = []
                 scanner = WiFiScanner(args.interface, vuln_list)
-                print('[*] BSSID not specified (--bssid) — scanning for available networks')
+                if not args.loop:
+                    print('[*] BSSID not specified (--bssid) — scanning for available networks')
                 args.bssid = scanner.prompt_network()
 
             if args.bssid:

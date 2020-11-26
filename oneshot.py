@@ -449,7 +449,7 @@ class Companion():
         inmsg = b.decode('utf-8', errors='replace')
         return inmsg
 
-    def __handle_wpas(self, pixiemode=False, verbose=None):
+    def __handle_wpas(self, pixiemode=False, verbose=None, bssid=""):
         if not verbose:
             verbose = self.print_debug
         line = self.wpas.stdout.readline()
@@ -543,7 +543,15 @@ class Companion():
             print('[*] Received Identity Request')
         elif 'using real identity' in line:
             print('[*] Sending Identity Response…')
-
+        elif bssid in line and 'level=' in line:
+            signal = line.split("level=")[1].split(" ")[0]
+            if 'noise=' in line:
+                noise = line.split("noise=")[1].split(" ")[0]
+                print ("[i] Current signal: {}, noise: {}".format(signal, noise))
+            else:
+                print ("[i] Current signal: {}".format(signal))
+            
+            
         return True
 
     def __runPixiewps(self, showcmd=False, full_range=False):
@@ -629,6 +637,7 @@ class Companion():
         self.connection_status.clear()
         self.wpas.stdout.read(300)   # Clean the pipe
         print(f"[*] Trying PIN '{pin}'…")
+        
         r = self.sendAndReceive(f'WPS_REG {bssid} {pin}')
         if 'OK' not in r:
             self.connection_status.status = 'WPS_FAIL'
@@ -636,7 +645,7 @@ class Companion():
             return False
 
         while True:
-            res = self.__handle_wpas(pixiemode=pixiemode, verbose=verbose)
+            res = self.__handle_wpas(pixiemode=pixiemode, verbose=verbose, bssid=bssid.lower())
             if not res:
                 break
             if self.connection_status.status == 'WSC_NACK':

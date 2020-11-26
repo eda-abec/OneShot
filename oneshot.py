@@ -399,7 +399,7 @@ class BruteforceStatus():
 
 class Companion():
     """Main application part"""
-    def __init__(self, interface, save_result=False, print_debug=False):
+    def __init__(self, interface, save_result=False, print_debug=False, bssid=''):
         self.interface = interface
         self.save_result = save_result
         self.print_debug = print_debug
@@ -428,6 +428,9 @@ class Companion():
             os.makedirs(self.pixiewps_dir)
 
         self.generator = WPSpin()
+        
+        self.bssid = bssid
+        self.lastPwr = 0
 
     def __init_wpa_supplicant(self):
         print('[*] Running wpa_supplicant…')
@@ -465,16 +468,16 @@ class Companion():
             if 'Building Message M' in line:
                 n = int(line.split('Building Message M')[1].replace('D', ''))
                 self.connection_status.last_m_message = n
-                print('[*] Sending WPS Message M{}…'.format(n))
+                self.__print_with_indicators('*', 'Sending WPS Message M{}…'.format(n))
             elif 'Received M' in line:
                 n = int(line.split('Received M')[1])
                 self.connection_status.last_m_message = n
-                print('[*] Received WPS Message M{}'.format(n))
+                self.__print_with_indicators('*', 'Received WPS Message M{}'.format(n))
                 if n == 5:
                     print('[+] The first half of the PIN is valid')
             elif 'Received WSC_NACK' in line:
                 self.connection_status.status = 'WSC_NACK'
-                print('[*] Received WSC NACK')
+                self.__print_with_indicators('*', 'Received WSC NACK')
                 print('[-] Error: wrong PIN code')
             elif 'Enrollee Nonce' in line and 'hexdump' in line:
                 self.pixie_creds.e_nonce = get_hex(line)
@@ -512,7 +515,7 @@ class Companion():
         elif ': State: ' in line:
             if '-> SCANNING' in line:
                 self.connection_status.status = 'scanning'
-                print('[*] Scanning…')
+                self.__print_with_indicators('*', 'Scanning…')
         elif ('WPS-FAIL' in line) and (self.connection_status.status != ''):
             self.connection_status.status = 'WPS_FAIL'
             print('[-] wpa_supplicant returned WPS-FAIL')
@@ -522,32 +525,34 @@ class Companion():
             self.connection_status.status = 'authenticating'
             if 'SSID' in line:
                 self.connection_status.essid = codecs.decode("'".join(line.split("'")[1:-1]), 'unicode-escape').encode('latin1').decode('utf-8', errors='replace')
-            print('[*] Authenticating…')
+            self.__print_with_indicators('*', 'Authenticating…')
         elif 'Authentication response' in line:
-            print('[+] Authenticated')
+            self.__print_with_indicators('*', 'Authenticated')
         elif 'Trying to associate with' in line:
             self.connection_status.status = 'associating'
             if 'SSID' in line:
                 self.connection_status.essid = codecs.decode("'".join(line.split("'")[1:-1]), 'unicode-escape').encode('latin1').decode('utf-8', errors='replace')
-            print('[*] Associating with AP…')
+            self.__print_with_indicators('*', 'Associating with AP…')
         elif ('Associated with' in line) and (self.interface in line):
             bssid = line.split()[-1].upper()
             if self.connection_status.essid:
-                print('[+] Associated with {} (ESSID: {})'.format(bssid, self.connection_status.essid))
+                self.__print_with_indicators('+', 'Associated with {} (ESSID: {})'.format(bssid, self.connection_status.essid))
             else:
-                print('[+] Associated with {}'.format(bssid))
+                self.__print_with_indicators('+', 'Associated with {}'.format(bssid))
         elif 'EAPOL: txStart' in line:
             self.connection_status.status = 'eapol_start'
-            print('[*] Sending EAPOL Start…')
+            self.__print_with_indicators('*', 'Sending EAPOL Start…')
         elif 'EAP entering state IDENTITY' in line:
-            print('[*] Received Identity Request')
+            self.__print_with_indicators('*', 'Received Identity Request')
         elif 'using real identity' in line:
-            print('[*] Sending Identity Response…')
+            self.__print_with_indicators('*', 'Sending Identity Response…')
+        elif self.bssid in line and 'level=' in line:
+            self.lastPwr = line.split("level=")[1].split(" ")[0]
 
         return True
 
     def __runPixiewps(self, showcmd=False, full_range=False):
-        print("[*] Running Pixiewps…")
+        self.__print_with_indicators('*', 'Running Pixiewps…')
         cmd = self.pixie_creds.get_pixie_cmd(full_range)
         if showcmd:
             print(cmd)
@@ -782,6 +787,9 @@ class Companion():
             print('[i] Session saved in {}'.format(filename))
             if args.loop:
                 raise KeyboardInterrupt
+
+    def __print_with_indicators(self, level, msg):
+        print('[{}] [{}] {}'.format(level, self.lastPwr, msg))
 
     def cleanup(self):
         self.retsock.close()
